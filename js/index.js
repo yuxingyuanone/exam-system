@@ -5,6 +5,14 @@
     'use strict';
     const { $, $$, esc, toast, openModal, closeModal, today, delay, subjectName } = UI;
 
+    /* 欢迎语用户名：有昵称显示昵称，否则显示当前登录账号 */
+    (function fillHeroName() {
+        const el = document.getElementById('hero-uname');
+        if (!el) return;
+        const u = localStorage.getItem('aigame_user') || '';
+        el.textContent = localStorage.getItem('aigame_nickname_' + u) || u;
+    })();
+
     /* ---------------- AI 待生成题库（流水线“生成”的新题毛坯） ---------------- */
     const GEN_POOL = {
         CALC: {
