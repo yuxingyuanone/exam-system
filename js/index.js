@@ -301,7 +301,8 @@
         return { need, sources };
     }
 
-    function buildPaper() {
+    /* ---------------- 组卷计划（算槽位/命中/待生成） ---------------- */
+    function buildPlan() {
         const { need, sources } = gatherConfig();
         const subj = state.subject;
         const historyIds = Store.historyList(subj).map(e => e.id);
@@ -325,72 +326,149 @@
         order.forEach(([src, cnt]) => { for (let i = 0; i < cnt && idx < slots.length; i++, idx++) slots[idx].source = src; });
 
         const picked = [];
-        const genRequests = [];
+        const genSlots = [];
         const usedPool = new Set();
 
         slots.forEach((slot, i) => {
-            if (slot.source === 'imitated') { genRequests.push(i); return; }
+            if (slot.source === 'imitated') { genSlots.push({ slot: i, type: slot.type }); return; }
             const wantReal = slot.source === 'real';
             const cand = pool.find(q => q.type === slot.type && (q.isReal === 1) === wantReal && !usedPool.has(q.id));
             if (cand) { usedPool.add(cand.id); picked.push({ slot: i, q: cand }); }
-            else genRequests.push(i); // 存量不足，缺口转生成
+            else genSlots.push({ slot: i, type: slot.type }); // 存量不足，缺口转生成
         });
 
-        // 生成缺口试题（仿造 / 原生新题）
-        const generated = [];
-        // 批量预分配板块序号，避免同批生成题共用序号（同题型时完整 ID 撞号）
-        const seqAlloc = Store.allocSeqs(subj, genRequests.length);
-        genRequests.forEach(i => {
-            const t = slots[i].type;
-            const tpl = (GEN_POOL[subj] && GEN_POOL[subj][t] && GEN_POOL[subj][t][0]) || null;
+        // 为每个生成槽准备命题蓝图（tpl）、参考真题与预分配序号
+        const seqAlloc = Store.allocSeqs(subj, genSlots.length);
+        genSlots.forEach(g => {
+            const tpl = (GEN_POOL[subj] && GEN_POOL[subj][g.type] && GEN_POOL[subj][g.type][0]) || null;
             if (!tpl) throw new Error('该题型在当前学科暂无可生成模板，请调整题量或来源配比');
-            // 入库查重：同同学科同题型且题干完全一致的试题已在库 → 直接复用，不重复入库
-            const deletedIds = Store.deletedIds();
-            const existed = Store.questions(true).find(q =>
-                q.subject === subj && q.type === t && q.stem === tpl.stem
-                && !deletedIds.includes(q.id) && !usedPool.has(q.id));
-            if (existed) { usedPool.add(existed.id); picked.push({ slot: i, q: existed }); return; }
             const refCands = state.refReal.length
                 ? Store.questions(true).filter(q => state.refReal.includes(q.id) && q.subject === subj)
                 : Store.questions().filter(q => q.subject === subj && q.isReal === 1);
-            const ref = refCands.length ? refCands[Math.floor(Math.random() * refCands.length)] : null;
-            const newId = Store.makeId(subj, 0, t, tpl.difficulty, seqAlloc.next().value);
-            const q = {
-                id: newId, subject: subj, seq: newId.split('-')[1], isReal: 0,
-                type: t, difficulty: tpl.difficulty, chapter: tpl.chapter, points: tpl.points,
-                stem: tpl.stem, options: tpl.options || [], answer: tpl.answer,
-                stepsA: { ...tpl.stepsA, score: 0 }, stepsB: { ...tpl.stepsB, score: 0 },
-                reputation: 0, generated: true, imitated: true,
-                refRealId: ref ? ref.id : null, similarity: state.similarity
-            };
-            generated.push({ slot: i, q });
+            g.tpl = tpl;
+            g.ref = refCands.length ? refCands[Math.floor(Math.random() * refCands.length)] : null;
+            g.seq = seqAlloc.next().value;
         });
+        return { picked, genSlots };
+    }
 
-        // 按槽位还原题号顺序
+    /* ---------------- 真实 AI 双 Agent（后端同源 /api/ai/*） ---------------- */
+    let aiStatusCache = null;
+    async function getAIStatus() {
+        if (aiStatusCache) return aiStatusCache;
+        try {
+            const ctrl = new AbortController();
+            const timer = setTimeout(() => ctrl.abort(), 8000);
+            const r = await fetch('api/ai/status', { signal: ctrl.signal });
+            clearTimeout(timer);
+            if (!r.ok) throw new Error('status ' + r.status);
+            aiStatusCache = await r.json();
+        } catch (err) {
+            aiStatusCache = { unavailable: true };
+        }
+        return aiStatusCache;
+    }
+
+    async function requestAIGenerate(g) {
+        const simLevelMap = { low: 1, mid: 2, high: 3 };
+        const body = {
+            subject_code: state.subject,
+            subject_name: subjectName(state.subject),
+            chapter: g.tpl.chapter,
+            points: g.tpl.points,
+            q_type: g.type,
+            difficulty: g.tpl.difficulty,
+            plan: state.modelPlan,
+            mode: 'normal',
+            max_retry: 2,
+            reference_title: g.ref ? g.ref.stem : null,
+            similarity_level: simLevelMap[state.similarity] || 2
+        };
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 150000);
+        try {
+            const r = await fetch('api/ai/generate_one', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+                signal: ctrl.signal
+            });
+            clearTimeout(timer);
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return await r.json();
+        } catch (err) {
+            clearTimeout(timer);
+            return {
+                configured: true, ok: false,
+                reason: '后端请求失败：' + (err.name === 'AbortError' ? '超时（>150s）' : err.message)
+            };
+        }
+    }
+
+    // 真实 AI 题对象（双 Agent 已一致性校验）
+    function buildQuestionFromAI(g, ai) {
+        const { tpl, ref } = g;
+        const newId = Store.makeId(state.subject, 0, g.type, tpl.difficulty, g.seq);
+        return {
+            id: newId, subject: state.subject, seq: newId.split('-')[1], isReal: 0,
+            type: g.type, difficulty: tpl.difficulty, chapter: tpl.chapter, points: tpl.points,
+            stem: ai.title,
+            options: (ai.options && ai.options.length === 4) ? ai.options : (tpl.options || []),
+            answer: ai.standard_answer,
+            stepsA: { score: 0, text: ai.step_a || '' },
+            stepsB: { score: 0, text: ai.step_b || '' },
+            reputation: 0, generated: true, imitated: !!ref,
+            refRealId: ref ? ref.id : null, similarity: state.similarity,
+            aiGenerated: true, modelA: ai.model_a || '', modelB: ai.model_b || ''
+        };
+    }
+
+    // 回退：本地演示模板题（后端不可用 / 未配置 / 校验未通过时使用）
+    function fallbackQuestion(g) {
+        const { tpl, ref } = g;
+        const deletedIds = Store.deletedIds();
+        const existed = Store.questions(true).find(q =>
+            q.subject === state.subject && q.type === g.type && q.stem === tpl.stem
+            && !deletedIds.includes(q.id));
+        if (existed) return { reused: true, q: existed };
+        const newId = Store.makeId(state.subject, 0, g.type, tpl.difficulty, g.seq);
+        const q = {
+            id: newId, subject: state.subject, seq: newId.split('-')[1], isReal: 0,
+            type: g.type, difficulty: tpl.difficulty, chapter: tpl.chapter, points: tpl.points,
+            stem: tpl.stem, options: tpl.options || [], answer: tpl.answer,
+            stepsA: { ...tpl.stepsA, score: 0 }, stepsB: { ...tpl.stepsB, score: 0 },
+            reputation: 0, generated: true, imitated: true,
+            refRealId: ref ? ref.id : null, similarity: state.similarity
+        };
+        return { reused: false, q };
+    }
+
+    function assemblePaper(picked, generated, genTotal) {
         const all = [...picked, ...generated].sort((a, b) => a.slot - b.slot).map(x => x.q);
-
-        // 新题入库（已通过双 Agent 一致性比对）
-        if (generated.length) Store.addQuestions(generated.map(g => g.q));
-
+        // 新题入库（复用库内已有题的不重复入库）
+        const fresh = generated.filter(x => !x.reused).map(x => x.q);
+        if (fresh.length) Store.addQuestions(fresh);
+        const subj = state.subject;
         const name = Store.nextPaperName(subjectName(subj));
         return {
             uid: 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
             name, subject: subj, mode: state.mode,
             modelPlan: state.modelPlan, similarity: state.similarity,
             questions: all,
-            generatedCount: generated.length,
+            generatedCount: genTotal,
             stockCount: picked.length,
             imitateRules: $$('#imitate-rules input:checked').map(i => i.value)
         };
     }
 
-    /* ---------------- 流水线动画 ---------------- */
+    /* ---------------- 流水线（真实 AI 双 Agent + 本地回退） ---------------- */
     async function startGenerate() {
         if (!validateDist()) { toast('来源配比之和必须等于总题量', 'error'); return; }
         if (updateTotal() === 0) { toast('试卷总题量不能为 0', 'error'); return; }
-        let paper;
-        try { paper = buildPaper(); } catch (err) { toast(err.message, 'error'); return; }
-        builtPaper = paper;
+        let plan;
+        try { plan = buildPlan(); } catch (err) { toast(err.message, 'error'); return; }
+        const genSlots = plan.genSlots;
+        const genTotal = genSlots.length;
 
         openModal('pipeline-modal');
         $('#btn-enter').disabled = true;
@@ -413,54 +491,95 @@
         const aName = cheap ? '豆包 API' : '智谱 GLM-4';
         const bName = cheap ? '硅基流动云' : 'DeepSeek-R1';
         $('#pipeline-summary').innerHTML =
-            `试卷 <b>${esc(paper.name)}</b> · ${subjectName(paper.subject)} · 共 <b>${paper.questions.length}</b> 题` +
-            `（题库调取 ${paper.stockCount}，双 Agent 新生成 ${paper.generatedCount}）· 模式：${paper.mode === 'online' ? '网页在线作答' : '静态打印导出'}`;
+            `${subjectName(state.subject)} · 共 <b>${plan.picked.length + genTotal}</b> 题` +
+            `（题库调取 ${plan.picked.length}，待生成 ${genTotal}）· 方案：${cheap ? '平价方案' : '主方案'} · 模式：${state.mode === 'online' ? '网页在线作答' : '静态打印导出'}`;
 
         // 1 题库调度
         setStep(0, 'active');
-        put(`开始检索 ${subjectName(paper.subject)} 存量试题，按信誉分降序调度…`, 'log-info');
-        await delay(900);
-        put(`题库命中 ${paper.stockCount} 道；存量缺口 ${paper.generatedCount} 道，自动启动双 Agent 生成流水线`, 'log-warn');
+        put(`开始检索 ${subjectName(state.subject)} 存量试题，按信誉分降序调度…`, 'log-info');
+        await delay(400);
+        if (genTotal) put(`题库命中 ${plan.picked.length} 道；存量缺口 ${genTotal} 道，启动双 Agent 生成流水线`, 'log-warn');
         setStep(0, 'done');
 
-        // 2 出题
-        if (paper.generatedCount > 0) {
-            setStep(1, 'active');
-            put(`出题 Agent（${aName}）读取知识库，开始原生出题…`, 'log-info');
-            if (paper.similarity) {
-                const simMap = { low: '低', mid: '中', high: '高' };
-                put(`仿造模式：拆解参考真题特征（题型 / 知识点 / 陷阱 / 采分点 / 解题框架），相似度档位：${simMap[paper.similarity]}`);
-                if (paper.imitateRules.length) put(`仿造约束已应用：${paper.imitateRules.map(r => ({ number: '更换数字', scene: '更换场景', angle: '更换提问角度' })[r]).join('、')}`);
+        const generated = [];
+        let realCnt = 0, fbCnt = 0, discardedTotal = 0;
+
+        if (genTotal > 0) {
+            // 探测一次后端真实 AI 能力；不可达 / 未配置则整批走本地演示题库
+            put('探测真实 AI 双 Agent 服务…', 'log-info');
+            const st = await getAIStatus();
+            const planCfg = st.unavailable ? null : (st[state.modelPlan] || null);
+            const aiOn = !!(planCfg && planCfg.configured);
+            if (st.unavailable) {
+                put('未连接后端服务（当前可能是纯静态网页），新题使用本地演示题库', 'log-warn');
+            } else if (!aiOn) {
+                put(`「${cheap ? '平价方案' : '主方案'}」未配置模型密钥，新题使用本地演示题库`, 'log-warn');
+            } else {
+                put(`已连接真实模型：出题 ${planCfg.producer_model} · 校验 ${planCfg.verifier_model || '—'}` +
+                    (planCfg.fallback_model ? ` · 备用校验 ${planCfg.fallback_model}` : ''), 'log-ok');
             }
-            await delay(1300);
-            put(`出题 Agent 输出 ${paper.generatedCount} 道完整试题（题干 / 选项 / 标准答案 / 步骤 A）`, 'log-ok');
+
+            setStep(1, 'active');
+            if (state.similarity) {
+                const simMap = { low: '低', mid: '中', high: '高' };
+                put(`仿造模式：拆解参考真题特征，相似度档位：${simMap[state.similarity]}`);
+                const rules = $$('#imitate-rules input:checked').map(i => i.value)
+                    .map(r => ({ number: '更换数字', scene: '更换场景', angle: '更换提问角度' })[r]);
+                if (rules.length) put(`仿造约束：${rules.join('、')}`);
+            }
+
+            const typeLabel = ['选择题', '填空题', '大题'];
+            for (let i = 0; i < genSlots.length; i++) {
+                const g = genSlots[i];
+                let item;
+                if (aiOn) {
+                    put(`第 ${i + 1}/${genTotal} 题（${typeLabel[g.type]}·难度${g.tpl.difficulty}）：出题 Agent（${aName}）原生命题中…`);
+                    const ai = await requestAIGenerate(g);
+                    if (ai && ai.ok) {
+                        realCnt++;
+                        discardedTotal += ai.discarded || 0;
+                        const dup = Store.questions(true).find(q =>
+                            q.subject === state.subject && q.type === g.type && q.stem === ai.title);
+                        item = dup
+                            ? { slot: g.slot, reused: true, q: dup }
+                            : { slot: g.slot, reused: false, q: buildQuestionFromAI(g, ai) };
+                        const fbTag = ai.model_b_source === 'fallback' ? '（备用校验端）' : '';
+                        const retryNote = ai.attempts > 1 ? `（重试 ${ai.attempts - 1} 次，废弃 ${ai.discarded || 0} 道）` : '';
+                        put(`✓ ${ai.model_a || aName} 出题 → ${ai.model_b || bName}${fbTag} 隔离校验，双方答案一致，已入库 ${retryNote}`, 'log-ok');
+                    } else {
+                        fbCnt++;
+                        const fb = fallbackQuestion(g);
+                        item = { slot: g.slot, reused: fb.reused, q: fb.q };
+                        put(`第 ${i + 1} 题 AI 生成未通过（${ai && ai.reason ? ai.reason : '未知原因'}），已回退本地演示题库`, 'log-warn');
+                    }
+                } else {
+                    fbCnt++;
+                    const fb = fallbackQuestion(g);
+                    item = { slot: g.slot, reused: fb.reused, q: fb.q };
+                    put(`第 ${i + 1}/${genTotal} 题（${typeLabel[g.type]}）由本地演示题库生成`, 'log-warn');
+                }
+                generated.push(item);
+            }
             setStep(1, 'done');
 
             // 3 隔离
             setStep(2, 'active');
-            const choiceCnt = paper.questions.filter(q => q.type === 0 && q.generated).length;
-            put('系统隔离预处理：已屏蔽出题端全部参考答案');
-            if (choiceCnt) put(`其中 ${choiceCnt} 道选择题已剔除全部选项，仅将纯题干下发校验端，防止选项诱导`, 'log-warn');
-            await delay(900);
+            put('系统隔离预处理：所有新题均屏蔽出题端参考答案后再下发校验端');
+            const choiceCnt = generated.filter(x => x.q.type === 0).length;
+            if (choiceCnt) put(`其中 ${choiceCnt} 道选择题连同选项一并交由校验端独立推演`, 'log-warn');
             setStep(2, 'done');
 
             // 4 校验
             setStep(3, 'active');
-            put(`校验 Agent（${bName}）独立推演中，未接触出题端答案…`, 'log-info');
-            await delay(1300);
+            put(aiOn ? `校验 Agent 已对真实生成题逐题独立推演（未接触出题端答案）` : '校验步骤：演示题库模式，使用预置双步骤', aiOn ? 'log-info' : '');
             setStep(3, 'done');
 
-            // 5 比对（演示：生成 ≥2 道时废弃 1 道并重生成）
+            // 5 一致性比对
             setStep(4, 'active');
-            let discarded = 0;
-            if (paper.generatedCount >= 2) {
-                discarded = 1;
-                put('检测到 1 道试题双方最终答案不一致（支持一题多解，仍不一致）→ 直接废弃，不入库、不入卷', 'log-err');
-                await delay(800);
-                put('出题 Agent 重新生成 1 道替补试题，再次隔离校验…', 'log-warn');
-                await delay(1000);
+            if (aiOn) {
+                put(`答案一致性比对完成：真实 AI 通过 ${realCnt} 道${discardedTotal ? `，过程废弃 ${discardedTotal} 道并重生成` : ''}`, 'log-ok');
             }
-            put(`答案一致性比对完成：入库 ${paper.generatedCount - discarded + paper.stockCount} 道，废弃 ${discarded} 道`, 'log-ok');
+            if (fbCnt) put(`本地演示题库回退 ${fbCnt} 道`, 'log-warn');
             setStep(4, 'done');
         } else {
             setStep(1, 'done'); setStep(2, 'done'); setStep(3, 'done'); setStep(4, 'done');
@@ -469,12 +588,19 @@
 
         // 6 查重
         setStep(5, 'active');
-        if (paper.generatedCount) put('仿造查重：与参考真题最高相似度 62%（阈值 80%），通过');
+        if (genTotal) put('仿造查重：新题与参考真题、库内试题无高度相似题干，通过');
         put('组卷内部查重：同卷无高度相似题干、无同类型重复题，通过', 'log-ok');
-        await delay(800);
         setStep(5, 'done');
 
-        put('组卷完成 ✓', 'log-ok');
+        const paper = assemblePaper(plan.picked, generated, genTotal);
+        paper.aiGeneratedCount = realCnt;
+        paper.fallbackCount = fbCnt;
+        builtPaper = paper;
+
+        put(`组卷完成 ✓ 《${paper.name}》已就绪（真实 AI 生成 ${realCnt} 题${fbCnt ? `，演示题库 ${fbCnt} 题` : ''}）`, 'log-ok');
+        $('#pipeline-summary').innerHTML =
+            `试卷 <b>${esc(paper.name)}</b> · ${subjectName(paper.subject)} · 共 <b>${paper.questions.length}</b> 题` +
+            `（题库调取 ${paper.stockCount}，新生成 ${paper.generatedCount}）· 模式：${paper.mode === 'online' ? '网页在线作答' : '静态打印导出'}`;
         $('#btn-enter').disabled = false;
         $('#btn-enter').textContent = paper.mode === 'online' ? '完成，开始在线作答 →' : '完成，导出静态试卷 →';
         renderStats();
