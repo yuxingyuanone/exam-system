@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>真题库·自成AI命题练习系统</title>
+    <link rel="stylesheet" href="./css/common.css?v=20261003e">
+    <link rel="stylesheet" href="./css/pages.css">
+</head>
+<body data-page="real">
+    <header class="topbar">
+        <div class="topbar-inner wrapper">
+            <a class="brand" href="index.html"><span class="logo">智</span><span class="name">智能命题练习系统</span></a>
+            <nav class="nav">
+                <a href="index.html" data-nav="home">首页</a>
+                <a href="bank.html" data-nav="bank">题库</a>
+                <a href="real.html" data-nav="real">真题库</a>
+                <a href="history.html" data-nav="history">历史习题</a>
+                <a href="archives.html" data-nav="archives">试卷存档</a>
+            </nav>
+            <div class="user-box">
+                <a class="user-home" href="profile.html" title="个人中心"><img src="./img/Users.png" alt=""><span class="uname">lilei</span></a>
+                <a class="logout" href="users.html">退出</a>
+            </div>
+        </div>
+    </header>
+
+    <main class="wrapper">
+        <div class="page-head">
+            <h2>📝 真题库专区</h2>
+            <p>独立真题库与 AI 生成题库隔离存储(ID第3段以1标识)支持单题勾选、批量多选，可单独组卷，也可搭配 AI 仿造变式题混合组卷。</p>
+        </div>
+
+        <div class="card">
+            <div class="tabs">
+                <div class="tab on" data-tab="list">真题浏览与组卷</div>
+                <div class="tab" data-tab="tpl">真题套卷模板</div>
+            </div>
+
+            <!-- 列表 Tab -->
+            <div id="tab-list">
+                <div class="flex-between mb16" style="flex-wrap:wrap;gap:10px;">
+                    <div class="flex" style="gap:10px;flex-wrap:wrap;">
+                        <select id="f-subject" style="width:150px;"></select>
+                        <input type="text" id="f-kw" placeholder="检索题干 / 题目ID" style="width:260px;">
+                    </div>
+                    <div class="flex" style="gap:8px;flex-wrap:wrap;">
+                        <button class="btn" id="btn-import-text">✍️ 手动文本录入</button>
+                        <button class="btn" id="btn-import-doc">📄 上传 Word / TXT</button>
+                        <button class="btn" id="btn-import-img">📷 图片 AI 识别</button>
+                        <button class="btn btn-success btn-sm" id="btn-save-tpl">💾 勾选真题存为套卷模板</button>
+                    </div>
+                </div>
+
+                <div class="q-list" id="real-list"></div>
+                <div class="empty" id="real-empty" style="display:none;">
+                    <div class="icon">📭</div><div class="mt8">该学科暂无真题，可通过右上角三种渠道录入</div>
+                </div>
+            </div>
+
+            <!-- 模板 Tab -->
+            <div id="tab-tpl" style="display:none;">
+                <p class="muted small mb16">保存录入的真题套卷模板，支持一键复用快速生成多套仿造模拟卷（低 / 中 / 高三档相似度）。</p>
+                <div class="tpl-grid" id="tpl-grid"></div>
+            </div>
+        </div>
+    </main>
+
+    <!-- 底部选择操作条 -->
+    <div class="select-action-bar" id="action-bar">
+        <span>已选真题 <span class="cnt" id="sel-count">0</span> 道</span>
+        <button class="btn btn-sm btn-accent" id="btn-paper-real">📝 用所选真题单独组卷</button>
+        <button class="btn btn-sm btn-primary" id="btn-paper-mix">🎭 真题 + AI 仿造混合组卷</button>
+        <button class="btn btn-sm" id="btn-sel-clear">取消选择</button>
+    </div>
+
+    <!-- 手动文本录入 -->
+    <div class="modal-mask" id="text-modal">
+        <div class="modal lg">
+            <div class="modal-head"><h3>✍️ 手动文本录入真题（支持批量粘贴，系统自动分割多题）</h3><button class="modal-close" data-close-modal="text-modal">×</button></div>
+            <div class="modal-body">
+                <div class="form-row">
+                    <div style="max-width:200px;">
+                        <label class="fld-label">所属学科</label>
+                        <select id="text-subject"></select>
+                    </div>
+                    <div>
+                        <label class="fld-label">批量粘贴区（格式：题号. 题干；选项每行一个；“答案：”“解析：”标注）</label>
+                        <textarea id="text-area" style="min-height:150px;" placeholder="1. 下列命题为真的是（ ）&#10;A. ...  B. ...  C. ...  D. ...&#10;答案：C&#10;解析：……&#10;&#10;2. 设 R 是集合 A 上的二元关系，若 R 自反、对称、传递，则 R 是______。&#10;答案：等价关系"></textarea>
+                    </div>
+                </div>
+                <button class="btn btn-primary btn-sm" id="text-parse">🔍 自动分割识别</button>
+                <div class="table-wrap mt16">
+                    <table class="tbl import-table" id="text-preview"></table>
+                </div>
+                <div class="import-result" id="text-result"></div>
+            </div>
+            <div class="modal-foot">
+                <button class="btn" data-close-modal="text-modal">取消</button>
+                <button class="btn btn-primary" id="text-confirm">确认导入真题库</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 文档上传 -->
+    <div class="modal-mask" id="doc-modal">
+        <div class="modal">
+            <div class="modal-head"><h3>📄 Word / TXT 文档上传导入</h3><button class="modal-close" data-close-modal="doc-modal">×</button></div>
+            <div class="modal-body">
+                <div class="upload-zone" id="doc-zone">
+                    <div class="uz-icon">📎</div>
+                    <div><b>点击选择</b> 或将 .docx / .doc / .txt 真题文档拖拽到此处</div>
+                    <div class="small mt8">内置文本解析器自动拆分题干、选项、答案</div>
+                    <input type="file" id="doc-file" accept=".doc,.docx,.txt" style="display:none;">
+                </div>
+                <div id="doc-progress" style="display:none;" class="mt16">
+                    <div class="flex mb8"><span class="small" id="doc-step">正在上传文档…</span><span class="small muted" id="doc-pct">0%</span></div>
+                    <div style="height:6px;background:#eef1f5;border-radius:3px;overflow:hidden;"><div id="doc-bar" style="height:100%;width:0;background:var(--primary);transition:width .2s;"></div></div>
+                </div>
+                <div class="table-wrap mt16" id="doc-result-wrap" style="display:none;">
+                    <div class="small muted mb8">识别结果预览（<span style="color:var(--warning);">橙色行</span>为识别失败的残缺题，请手动补全后再导入）：</div>
+                    <table class="tbl import-table" id="doc-preview"></table>
+                </div>
+            </div>
+            <div class="modal-foot">
+                <button class="btn" data-close-modal="doc-modal">取消</button>
+                <button class="btn btn-primary" id="doc-confirm" disabled>补全并导入真题库</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 图片 AI 识别 -->
+    <div class="modal-mask" id="img-modal">
+        <div class="modal lg">
+            <div class="modal-head"><h3>📷 拍照 / 图片 AI 识别（识别后生成可编辑 Word，支持几何配图修改）</h3><button class="modal-close" data-close-modal="img-modal">×</button></div>
+            <div class="modal-body">
+                <div class="form-grid">
+                    <div>
+                        <div class="upload-zone" id="img-zone">
+                            <div class="uz-icon">📸</div>
+                            <div><b>点击上传</b> 真题照片 / 截图</div>
+                            <div class="small mt8">支持 JPG / PNG，可拍整页试卷</div>
+                            <input type="file" id="img-file" accept="image/*" style="display:none;">
+                        </div>
+                        <div id="img-steps" class="steps-v mt16" style="display:none;"></div>
+                    </div>
+                    <div>
+                        <label class="fld-label">AI 识别生成的 Word 内容（可直接修改）</label>
+                        <textarea id="img-word" style="min-height:300px;display:none;" placeholder="识别结果将出现在这里，可编辑…"></textarea>
+                        <div id="img-placeholder" class="empty" style="padding:60px 10px;">
+                            <div class="icon">🖼️</div><div class="mt8">上传图片后，识别结果将在此生成可编辑 Word 文本</div>
+                        </div>
+                        <div class="mt8 small muted" id="img-fig-note" style="display:none;">
+                            📐 已检测到 <b>1 处几何配图</b>，已在题目下方插入占位图位【几何配图：可点击替换 / 标注修改】。
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-foot">
+                <button class="btn" data-close-modal="img-modal">取消</button>
+                <button class="btn btn-primary" id="img-confirm" disabled>确认修改并导入真题库</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 仿造组卷配置 -->
+    <div class="modal-mask" id="imitate-modal">
+        <div class="modal sm">
+            <div class="modal-head"><h3>🎭 仿造组卷配置</h3><button class="modal-close" data-close-modal="imitate-modal">×</button></div>
+            <div class="modal-body">
+                <div class="mb16">
+                    <label class="fld-label">相似度档位</label>
+                    <div class="seg-cards" id="im-similarity">
+                        <div class="seg-card" data-v="low"><div class="seg-t">低</div><div class="seg-d">同知识点异构</div></div>
+                        <div class="seg-card on" data-v="mid"><div class="seg-t">中</div><div class="seg-d">保留框架换考查点</div></div>
+                        <div class="seg-card" data-v="high"><div class="seg-t">高</div><div class="seg-d">贴近真题风格</div></div>
+                    </div>
+                </div>
+                <div class="mb16">
+                    <label class="fld-label">每道真题搭配仿造变式题数量</label>
+                    <input type="number" id="im-count" min="0" max="3" value="1">
+                </div>
+                <div class="mb16">
+                    <label class="fld-label">仿造约束</label>
+                    <div class="chips accent">
+                        <label class="chip on"><input type="checkbox" checked value="number">更换数字</label>
+                        <label class="chip on"><input type="checkbox" checked value="scene">更换场景</label>
+                        <label class="chip on"><input type="checkbox" checked value="angle">更换提问角度</label>
+                    </div>
+                </div>
+                <div class="small muted">仿造题生成后将自动与参考真题、库内试题查重，相似度超标自动重生成；新题初始信誉分为 0。</div>
+            </div>
+            <div class="modal-foot">
+                <button class="btn" data-close-modal="imitate-modal">取消</button>
+                <button class="btn btn-primary" id="im-confirm">启动仿造流水线组卷</button>
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer">自成 · AI 命题练习系统 —— 真题智能仿造流水线 · 三档相似度批量生成变式习题</footer>
+
+    <script src="./js/data.js"></script>
+    <script src="./js/common.js?v=20261003g"></script>
+    <script src="./js/real.js?v=20261002b"></script>
+</body>
+</html>

@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>历史习题·自成AI命题练习系统</title>
+    <link rel="stylesheet" href="./css/common.css?v=20261003e">
+    <link rel="stylesheet" href="./css/pages.css">
+</head>
+<body data-page="history">
+    <header class="topbar">
+        <div class="topbar-inner wrapper">
+            <a class="brand" href="index.html"><span class="logo">智</span><span class="name">智能命题练习系统</span></a>
+            <nav class="nav">
+                <a href="index.html" data-nav="home">首页</a>
+                <a href="bank.html" data-nav="bank">题库</a>
+                <a href="real.html" data-nav="real">真题库</a>
+                <a href="history.html" data-nav="history">历史习题</a>
+                <a href="archives.html" data-nav="archives">试卷存档</a>
+            </nav>
+            <div class="user-box">
+                <a class="user-home" href="profile.html" title="个人中心"><img src="./img/Users.png" alt=""><span class="uname">lilei</span></a>
+                <a class="logout" href="users.html">退出</a>
+            </div>
+        </div>
+    </header>
+
+    <main class="wrapper">
+        <div class="page-head">
+            <h2>✅ 我的历史习题</h2>
+            <p>线上作答自动归档、线下打印存档批量加入的题目统一进入本列表（按学科分类，仅存题目 ID 不重复存题）。点开任意题目可提交两类错误反馈，统一进入双 Agent 信誉分质控流程。</p>
+        </div>
+
+        <div class="card">
+            <div class="flex-between mb16" style="flex-wrap:wrap;gap:12px;">
+                <div class="chips" id="subject-tabs">
+                    <label class="chip on" data-subject=""><input type="radio" name="htab" checked>全部学科</label>
+                </div>
+                <div class="flex" style="gap:10px;">
+                    <select id="f-source" style="width:160px;">
+                        <option value="">全部来源</option>
+                        <option value="online">网页在线作答</option>
+                        <option value="print">线下打印存档</option>
+                    </select>
+                    <select id="f-fb" style="width:170px;">
+                        <option value="">全部反馈状态</option>
+                        <option value="none">尚未反馈</option>
+                        <option value="stem">已反馈题干错误</option>
+                        <option value="stepA">已反馈步骤错误</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="q-list" id="history-list"></div>
+            <div class="empty" id="history-empty" style="display:none;">
+                <div class="icon">📝</div>
+                <div class="mt8">该分类下暂无历史习题</div>
+                <div class="mt16"><a class="btn btn-primary btn-sm" href="index.html">去组卷刷题 →</a>　<a class="btn btn-sm" href="archives.html">从试卷存档加入 →</a></div>
+            </div>
+        </div>
+    </main>
+
+    <!-- 题目详情 / 反馈弹窗 -->
+    <div class="modal-mask" id="detail-modal">
+        <div class="modal lg">
+            <div class="modal-head"><h3>题目详情与错误反馈</h3><button class="modal-close" data-close-modal="detail-modal">×</button></div>
+            <div class="modal-body" id="detail-body"></div>
+            <div class="modal-foot">
+                <button class="btn" data-close-modal="detail-modal">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer">自成·AI 命题练习系统 —— 用户反馈 + 双机器二次复核 · 线上线下全场景反馈闭环</footer>
+
+    <script src="./js/data.js"></script>
+    <script src="./js/common.js?v=20261003g"></script>
+    <script src="./js/history.js"></script>
+</body>
+</html>

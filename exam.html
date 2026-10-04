@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>在线作答·自成AI命题练习系统</title>
+    <link rel="stylesheet" href="./css/common.css?v=20261003e">
+    <link rel="stylesheet" href="./css/exam.css?v=20261002f">
+    <!-- PDF.js：网页端 PDF 渲染引擎（Mozilla 开源）。后端就绪后传入真实 .pdf 地址即可渲染真实试卷 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+</head>
+<body>
+    <header class="topbar">
+        <div class="topbar-inner wrapper">
+            <a class="brand" href="index.html">
+                <span class="logo">智</span>
+                <span class="name">智能命题练习系统</span>
+            </a>
+            <nav class="nav">
+                <a href="index.html" data-nav="home">首页</a>
+                <a href="bank.html" data-nav="bank">题库</a>
+                <a href="real.html" data-nav="real">真题库</a>
+                <a href="history.html" data-nav="history">历史习题</a>
+                <a href="archives.html" data-nav="archives">试卷存档</a>
+            </nav>
+            <div class="user-box">
+                <a class="user-home" href="profile.html" title="个人中心">
+                    <img src="./img/Users.png" alt="">
+                    <span class="uname">lilei</span>
+                </a>
+                <a class="logout" href="users.html">退出</a>
+            </div>
+        </div>
+    </header>
+
+    <!-- 作答工具栏 -->
+    <div class="exam-bar">
+        <div class="wrapper exam-bar-inner">
+            <div class="exam-title">
+                <span id="paper-name-title">试卷加载中…</span>
+                <span class="et-sub" id="paper-sub-title"></span>
+            </div>
+            <div class="timer-pill" id="timer-pill" title="点击暂停 / 继续">
+                ⏱ <span id="timer-text">00:00</span>
+                <span class="tip" id="timer-tip">点击暂停</span>
+            </div>
+            <div class="sync-dot"><span class="dot"></span><span id="sync-text">作答数据实时同步中</span></div>
+
+            <div class="bar-sep"></div>
+            <div class="tool-grp">
+                <button class="tool-btn" id="prev-page" title="上一页">◀</button>
+                <span class="page-info"><span id="cur-page">1</span>/<span id="total-page">1</span></span>
+                <button class="tool-btn" id="next-page" title="下一页">▶</button>
+                <button class="tool-btn" id="zoom-out" title="缩小">－</button>
+                <button class="tool-btn" id="zoom-in" title="放大">＋</button>
+            </div>
+
+            <div class="bar-sep"></div>
+            <div class="tool-grp" id="pen-tools">
+                <button class="tool-btn on" id="tool-pen" title="画笔">✏️</button>
+                <button class="tool-btn" id="tool-eraser" title="橡皮">🧽</button>
+                <span class="color-dot on" data-color="#1f2733" style="background:#1f2733" title="黑色"></span>
+                <span class="color-dot" data-color="#d03050" style="background:#d03050" title="红色"></span>
+                <span class="color-dot" data-color="#0460bc" style="background:#0460bc" title="蓝色"></span>
+                <button class="tool-btn" id="clear-page" title="清空本页草稿">🗑️</button>
+            </div>
+
+            <div class="bar-sep"></div>
+            <div class="tool-grp">
+                <div class="mode-switch-mini" title="草稿模式">
+                    <button class="on" data-draft="global">全局画布草稿</button>
+                    <button data-draft="locked">卷面锁定·独立草稿页</button>
+                </div>
+                <button class="tool-btn" id="open-draft" style="display:none;">📝 打开草稿页</button>
+            </div>
+
+            <button class="btn btn-sm" id="save-exit-btn" style="margin-left:auto;">💾 保存退出</button>
+            <button class="btn btn-primary btn-sm" id="submit-btn" style="margin-left:8px;">交卷 · AI 批改</button>
+        </div>
+    </div>
+
+    <!-- 作答主体：左试卷舞台 / 中拖拽分栏滑块 / 右答题卡 -->
+    <div class="exam-layout" id="exam-layout">
+        <!-- PDF 试卷舞台（当前为内置版式渲染；接入后端后由 PDF.js 渲染真实 PDF，交互层叠加方式不变） -->
+        <main class="exam-stage" id="exam-stage">
+            <div class="page-fit" id="page-fit">
+                <div class="page-scaler" id="page-scaler"></div>
+            </div>
+        </main>
+
+        <!-- 左右分栏拖拽滑块：拖动调整试卷区与答题卡宽度 -->
+        <div class="exam-splitter" id="exam-splitter" title="拖动调整左右宽度">
+            <span class="sp-grip" aria-hidden="true"></span>
+        </div>
+
+        <!-- 答题卡 -->
+        <aside class="answer-card" id="answer-card">
+            <div class="ac-t">答题卡</div>
+            <div class="ac-grid" id="ac-grid"></div>
+            <div class="ac-legend">
+                蓝：已作答<br>灰：未作答<br>交卷后显示对错
+            </div>
+        </aside>
+    </div>
+
+    <!-- 开始作答遮罩 -->
+    <div class="cover" id="start-cover">
+        <div class="cover-box">
+            <div class="cv-icon">📝</div>
+            <h2 id="start-title">试卷已就绪</h2>
+            <p id="start-desc"></p>
+            <button class="btn btn-primary btn-lg btn-block" id="start-btn">开始作答（启动计时）</button>
+        </div>
+    </div>
+
+    <!-- 暂停遮罩 -->
+    <div class="cover hidden" id="pause-cover">
+        <div class="cover-box">
+            <div class="cv-icon">⏸</div>
+            <h2>作答已暂停</h2>
+            <div class="cv-timer" id="pause-timer">00:00</div>
+            <p class="small" style="text-align:center;">切换窗口 / 退出页面时系统会自动暂停计时<br>试卷内容已锁定，点击继续恢复作答</p>
+            <button class="btn btn-primary btn-lg btn-block" id="resume-btn">继续作答</button>
+            <button class="btn btn-lg btn-block" id="pause-exit-btn" style="margin-top:10px;">💾 保存并退出</button>
+        </div>
+    </div>
+
+    <!-- 独立草稿页（卷面锁定模式） -->
+    <div class="draft-stage" id="draft-stage">
+        <div class="draft-bar">
+            <span class="db-title">📝 专属草稿演算页（试卷作答区已锁定）</span>
+            <button class="tool-btn on" id="draft-pen" style="background:#fff;">✏️ 画笔</button>
+            <button class="tool-btn" id="draft-eraser" style="background:#fff;color:#333;">🧽 橡皮</button>
+            <button class="tool-btn" id="draft-clear" style="background:#fff;color:#333;">🗑️ 清空全部</button>
+            <span class="warn">⚠ 必须清空全部草稿内容后，方可退出草稿页返回试卷</span>
+            <button class="btn btn-sm" id="draft-exit" disabled>清空后返回试卷</button>
+        </div>
+        <div class="draft-canvas-wrap">
+            <canvas id="draftCanvas" width="900" height="1200"></canvas>
+        </div>
+    </div>
+
+    <!-- 保存退出确认 -->
+    <div class="modal-mask" id="exit-confirm">
+        <div class="modal sm">
+            <div class="modal-head"><h3>暂时离开？</h3><button class="modal-close" data-close-modal="exit-confirm">×</button></div>
+            <div class="modal-body" id="exit-confirm-body"></div>
+            <div class="modal-foot" style="justify-content:space-between;">
+                <button class="btn" data-close-modal="exit-confirm">继续作答</button>
+                <span>
+                    <button class="btn btn-danger" id="exit-discard">不保存退出</button>
+                    <button class="btn btn-primary" id="exit-save">💾 保存并退出</button>
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 交卷确认 -->
+    <div class="modal-mask" id="submit-confirm">
+        <div class="modal sm">
+            <div class="modal-head"><h3>确认交卷？</h3><button class="modal-close" data-close-modal="submit-confirm">×</button></div>
+            <div class="modal-body" id="submit-confirm-body"></div>
+            <div class="modal-foot">
+                <button class="btn" data-close-modal="submit-confirm">继续作答</button>
+                <button class="btn btn-primary" id="confirm-submit">确认交卷</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 批改结果 -->
+    <div class="modal-mask" id="result-modal">
+        <div class="modal lg">
+            <div class="modal-head"><h3>📊 AI 自动批改结果</h3></div>
+            <div class="modal-body" id="result-body"></div>
+            <div class="modal-foot">
+                <button class="btn" onclick="location.href='index.html'">返回首页</button>
+                <button class="btn btn-primary" onclick="location.href='history.html'">前往历史习题查看解析 / 反馈 →</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="./js/data.js"></script>
+    <script src="./js/common.js?v=20261003g"></script>
+    <script src="./js/exam.js?v=20261003f"></script>
+</body>
+</html>

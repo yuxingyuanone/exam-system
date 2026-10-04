@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>忘记密码 - 智卷工坊</title>
+    <link rel="stylesheet" href="./css/users.css?v=20261004">
+</head>
+<body>
+    <div class="loginWrapper">
+        <div class="titleBrand">
+            <h2>忘记密码</h2>
+        </div>
+        <form id="form-forgot" onsubmit="return false;">
+            <div class="banner">
+                <label>注册邮箱</label>
+                <input type="text" id="fp-email" placeholder="请输入注册时的邮箱" autocomplete="username">
+            </div>
+            <div class="banner">
+                <label>邮箱验证码</label>
+                <div class="code-row">
+                    <input type="text" id="fp-code" placeholder="6 位验证码" maxlength="6" inputmode="numeric" autocomplete="one-time-code">
+                    <button type="button" class="send-btn" id="btn-send">发送验证码</button>
+                </div>
+                <!-- 演示版无邮件服务：验证码直接显示在此页内提示条 -->
+                <div class="form-msg form-msg-info" id="fp-code-tip" hidden></div>
+            </div>
+            <div class="banner">
+                <label>新密码</label>
+                <input type="password" id="fp-pwd" placeholder="不少于 6 位" autocomplete="new-password">
+            </div>
+            <div class="banner">
+                <label>确认新密码</label>
+                <input type="password" id="fp-pwd2" placeholder="再次输入新密码" autocomplete="new-password">
+            </div>
+            <div class="form-msg" id="fp-tip" hidden></div>
+            <button type="button" class="login-btn" id="btn-reset">重置密码</button>
+        </form>
+        <a class="back-link" href="./users.html">← 返回登录</a>
+    </div>
+
+    <script>
+        (function () {
+            const emailEl = document.getElementById('fp-email');
+            const codeEl = document.getElementById('fp-code');
+            const pwdEl = document.getElementById('fp-pwd');
+            const pwd2El = document.getElementById('fp-pwd2');
+            const sendBtn = document.getElementById('btn-send');
+            const tipEl = document.getElementById('fp-tip');
+            const codeTipEl = document.getElementById('fp-code-tip');
+            const resetBtn = document.getElementById('btn-reset');
+            const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            let countdownTimer = null;
+
+            const readPwdTable = () => {
+                try { return JSON.parse(localStorage.getItem('aigame_passwords') || '{}'); }
+                catch (e) { return {}; }
+            };
+
+            // 统一页内消息：type 为 error / success / info
+            function showTip(msg, type) {
+                tipEl.hidden = false;
+                tipEl.className = 'form-msg ' + (type ? 'form-msg-' + type : '');
+                tipEl.textContent = msg;
+            }
+            function clearTip() {
+                tipEl.hidden = true;
+                tipEl.textContent = '';
+                tipEl.className = 'form-msg';
+            }
+
+            // 发送验证码：本地生成 6 位数字，5 分钟有效；演示版无邮件服务，验证码显示在页内提示条
+            sendBtn.addEventListener('click', () => {
+                const email = emailEl.value.trim();
+                if (!EMAIL_RE.test(email)) { showTip('请输入正确的邮箱地址', 'error'); return; }
+                const tbl = readPwdTable();
+                if (!tbl[email]) { showTip('该邮箱未注册，请先注册', 'error'); return; }
+                clearTip();
+                const code = String(Math.floor(100000 + Math.random() * 900000));
+                localStorage.setItem('aigame_fp_code_' + email, JSON.stringify({ code: code, exp: Date.now() + 5 * 60 * 1000 }));
+                codeTipEl.hidden = false;
+                codeTipEl.textContent = '验证码已发送（演示版无邮件服务）：' + code + '，5 分钟内有效';
+                let left = 60;
+                sendBtn.disabled = true;
+                if (countdownTimer) clearInterval(countdownTimer);
+                countdownTimer = setInterval(() => {
+                    sendBtn.textContent = '重新发送(' + left + 's)';
+                    left--;
+                    if (left < 0) {
+                        clearInterval(countdownTimer);
+                        countdownTimer = null;
+                        sendBtn.disabled = false;
+                        sendBtn.textContent = '发送验证码';
+                    }
+                }, 1000);
+                codeEl.focus();
+            });
+
+            // 重置密码：校验验证码与两次密码后写入本地密码表；成功后提示并自动返回登录页
+            resetBtn.addEventListener('click', () => {
+                const email = emailEl.value.trim();
+                const code = codeEl.value.trim();
+                const pwd = pwdEl.value;
+                const pwd2 = pwd2El.value;
+                if (!EMAIL_RE.test(email)) { showTip('请输入正确的邮箱地址', 'error'); return; }
+                if (!code) { showTip('请输入验证码', 'error'); return; }
+                if (pwd.length < 6) { showTip('密码不少于 6 位', 'error'); return; }
+                if (pwd !== pwd2) { showTip('两次输入的密码不一致', 'error'); return; }
+                let rec = null;
+                try { rec = JSON.parse(localStorage.getItem('aigame_fp_code_' + email)); } catch (e) { }
+                if (!rec || !rec.code) { showTip('请先获取验证码', 'error'); return; }
+                if (Date.now() > rec.exp) { showTip('验证码已过期，请重新发送', 'error'); return; }
+                if (code !== rec.code) { showTip('验证码错误', 'error'); return; }
+
+                const tbl = readPwdTable();
+                tbl[email] = pwd;
+                localStorage.setItem('aigame_passwords', JSON.stringify(tbl));
+                localStorage.removeItem('aigame_fp_code_' + email);
+                localStorage.setItem('aigame_last_login', email); // 登录页预填充
+
+                if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
+                codeTipEl.hidden = true;
+                resetBtn.disabled = true;
+                sendBtn.disabled = true;
+                showTip('密码重置成功，1.5 秒后自动返回登录页……', 'success');
+                setTimeout(() => { location.replace('users.html'); }, 1500);
+            });
+        })();
+    </script>
+</body>
+</html>

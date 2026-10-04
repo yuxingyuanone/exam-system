@@ -1,0 +1,128 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+body {
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+    /* 直接在body写动态流线背景，多组svg波浪 */
+    background-color: #f5f7fa;
+    background-image: url("data:image/svg+xml,%3Csvg width='1000' height='600' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0,80 Q250,20 500,100 T1000,60' fill='none' stroke='%234080ff' stroke-width='2' opacity='0.2'/%3E%3Cpath d='M0,220 Q250,300 500,180 T1000,240' fill='none' stroke='%234080ff' stroke-width='1.5' opacity='0.16'/%3E%3Cpath d='M0,400 Q250,340 500,460 T1000,420' fill='none' stroke='%234080ff' stroke-width='1' opacity='0.12'/%3E%3C/svg%3E");
+    background-repeat: repeat;
+    background-size: 1000px 600px;
+    animation: bodyWaveMove 16s linear infinite;
+    overflow: hidden;
+}
+
+/* body背景线条动画 */
+@keyframes bodyWaveMove {
+    0% {
+        background-position: 0 0;
+    }
+    100% {
+        background-position: -1000px 600px;
+    }
+}
+
+.loginWrappertwo {
+    width: 420px;
+    max-width: calc(100% - 32px); /* 缩放/窄屏时自动收缩，不出屏 */
+    background: #ffffff;
+    padding: 40px 32px;
+    border-radius: 12px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+    position: relative;
+    z-index: 10;
+}
+
+.title-brand {
+    text-align: center;
+    margin-bottom: 32px;
+}
+
+.title-brand h2 {
+    font-size: 26px;
+    color: #222;
+    font-weight: 600;
+}
+
+.form-item {
+    margin-bottom: 20px;
+}
+
+.form-item label {
+    display: block;
+    font-size: 14px;
+    color: #444;
+    margin-bottom: 8px;
+}
+
+.form-item input {
+    width: 100%;
+    height: 44px;
+    padding: 0 14px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 15px;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.form-item input:focus {
+    border-color: #4080ff;
+}
+
+.login-btn {
+    width: 100%;
+    height: 46px;
+    background-color: #4080ff;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    margin-top: 8px;
+}
+
+.login-btn:hover {
+    background-color: #2b6ede;
+}
+
+.login-btn:active {
+    background-color: #2058bc;
+}
+
+/* 页内提示条（替代 alert，避免弹窗关不掉） */
+.form-msg{
+    margin: 0 0 14px;
+    padding: 9px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    line-height: 1.5;
+}
+.form-msg[hidden]{
+    display: none;
+}
+.form-msg-error{
+    background: #fef0f0;
+    color: #d93026;
+}
+.back-link{
+    display: block;
+    text-align: center;
+    margin-top: 18px;
+    color: #888;
+    font-size: 14px;
+    text-decoration: none;
+}
+.back-link:hover{
+    color: #4080ff;
+}
+

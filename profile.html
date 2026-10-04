@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>个人中心 - 智卷工坊</title>
+    <link rel="stylesheet" href="./css/profile.css?v=20261004">
+</head>
+<body>
+<div class="container">
+    <a href="index.html" class="back">← 返回首页</a>
+    <a href="javascript:void(0)" class="back" onclick="logout()">退出登录 →</a>
+    <h1 style="margin:20px 0;">个人中心</h1>
+
+    <!-- 头像 -->
+    <div class="section">
+        <h2>头像</h2>
+        <div class="avatar-row">
+            <div class="avatar" id="avatarPreview">👤</div>
+            <div>
+                <input type="file" id="avatarInput" accept="image/*" hidden>
+                <button class="btn btn-secondary" onclick="document.getElementById('avatarInput').click()">更换头像</button>
+                <div class="tip">头像仅保存在本地浏览器</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 名字 -->
+    <div class="section">
+        <h2>昵称</h2>
+        <div class="row">
+            <input type="text" id="nickname" placeholder="输入昵称">
+        </div>
+        <button class="btn btn-primary" onclick="saveNickname()">保存昵称</button>
+        <div class="tip" id="nickTip"></div>
+    </div>
+
+    <!-- 密码修改 -->
+    <div class="section">
+        <h2>修改密码</h2>
+        <div class="row">
+            <label>邮箱</label>
+            <input type="email" id="resetEmail" placeholder="注册时用的邮箱">
+        </div>
+        <div class="row">
+            <label>验证码</label>
+            <input type="text" id="resetCode" placeholder="邮箱收到的验证码">
+        </div>
+        <button class="btn btn-secondary" id="sendCodeBtn" onclick="sendCode()">发送验证码</button>
+        <div class="tip tip-info" id="resetCodeTip" hidden></div>
+        <div class="row" style="margin-top:12px;">
+            <label>新密码</label>
+            <input type="password" id="newPassword" placeholder="新密码">
+        </div>
+        <button class="btn btn-primary" onclick="resetPassword()">确认修改</button>
+        <div class="tip" id="resetTip"></div>
+    </div>
+</div>
+
+<script src="./js/common.js?v=20261003g"></script>
+<script>
+const CURRENT_USER = localStorage.getItem('aigame_user') || 'guest';
+const AVATAR_KEY = 'aigame_avatar_' + CURRENT_USER;
+const NICKNAME_KEY = 'aigame_nickname_' + CURRENT_USER;
+const PWD_KEY = 'aigame_passwords';
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+let codeTimer = null;
+
+// 统一页内提示（替代 alert，避免内嵌浏览器弹窗卡死关不掉）
+function showInlineTip(el, msg, type) {
+    el.hidden = false;
+    el.textContent = msg;
+    el.className = 'tip' + (type ? ' tip-' + type : '');
+}
+
+// 头像预览（按用户隔离）
+document.getElementById('avatarInput').onchange = function(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(ev) {
+        document.getElementById('avatarPreview').innerHTML = '<img src="' + ev.target.result + '">';
+        localStorage.setItem(AVATAR_KEY, ev.target.result);
+    };
+    reader.readAsDataURL(file);
+};
+
+// 页面加载时恢复当前用户数据（common.js 的登录门禁已保证未登录不会停留在本页）
+window.onload = function() {
+    if (!localStorage.getItem('aigame_user')) { location.replace('users.html'); return; }
+    const savedAvatar = localStorage.getItem(AVATAR_KEY);
+    if (savedAvatar) document.getElementById('avatarPreview').innerHTML = '<img src="' + savedAvatar + '">';
+    const savedName = localStorage.getItem(NICKNAME_KEY);
+    if (savedName) document.getElementById('nickname').value = savedName;
+    document.getElementById('resetEmail').value = CURRENT_USER;
+};
+
+function saveNickname() {
+    const tipEl = document.getElementById('nickTip');
+    const name = document.getElementById('nickname').value.trim();
+    if (!name) { showInlineTip(tipEl, '请输入昵称', 'error'); return; }
+    localStorage.setItem(NICKNAME_KEY, name);
+    showInlineTip(tipEl, '昵称已保存', 'success');
+}
+
+// 发送验证码：本地生成 6 位数字，按邮箱存储、5 分钟有效；演示版无邮件服务，直接显示在页内
+function sendCode() {
+    const tipEl = document.getElementById('resetTip');
+    const codeTipEl = document.getElementById('resetCodeTip');
+    const email = document.getElementById('resetEmail').value.trim();
+    if (!EMAIL_RE.test(email)) { showInlineTip(tipEl, '请输入正确的邮箱地址', 'error'); return; }
+    const tbl = JSON.parse(localStorage.getItem(PWD_KEY) || '{}');
+    if (!tbl[email]) { showInlineTip(tipEl, '该邮箱未注册', 'error'); return; }
+    tipEl.hidden = true;
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    localStorage.setItem('aigame_fp_code_' + email, JSON.stringify({ code: code, exp: Date.now() + 5 * 60 * 1000 }));
+    showInlineTip(codeTipEl, '验证码已发送（演示版无邮件服务）：' + code + '，5 分钟内有效', 'info');
+    const btn = document.getElementById('sendCodeBtn');
+    let left = 60;
+    btn.disabled = true;
+    if (codeTimer) clearInterval(codeTimer);
+    codeTimer = setInterval(() => {
+        btn.textContent = '重新发送(' + left + 's)';
+        left--;
+        if (left < 0) { clearInterval(codeTimer); codeTimer = null; btn.disabled = false; btn.textContent = '发送验证码'; }
+    }, 1000);
+}
+
+// 修改密码：校验验证码后写入本地密码表，全程页内提示，无弹窗
+function resetPassword() {
+    const tipEl = document.getElementById('resetTip');
+    const codeTipEl = document.getElementById('resetCodeTip');
+    const email = document.getElementById('resetEmail').value.trim();
+    const code = document.getElementById('resetCode').value.trim();
+    const pwd = document.getElementById('newPassword').value;
+    if (!EMAIL_RE.test(email)) { showInlineTip(tipEl, '请输入正确的邮箱地址', 'error'); return; }
+    if (!code || !pwd) { showInlineTip(tipEl, '请填写验证码和新密码', 'error'); return; }
+    if (pwd.length < 6) { showInlineTip(tipEl, '密码不少于 6 位', 'error'); return; }
+    let rec = null;
+    try { rec = JSON.parse(localStorage.getItem('aigame_fp_code_' + email)); } catch (e) { }
+    if (!rec || !rec.code) { showInlineTip(tipEl, '请先获取验证码', 'error'); return; }
+    if (Date.now() > rec.exp) { showInlineTip(tipEl, '验证码已过期，请重新发送', 'error'); return; }
+    if (code !== rec.code) { showInlineTip(tipEl, '验证码错误', 'error'); return; }
+    const tbl = JSON.parse(localStorage.getItem(PWD_KEY) || '{}');
+    tbl[email] = pwd;
+    localStorage.setItem(PWD_KEY, JSON.stringify(tbl));
+    localStorage.removeItem('aigame_fp_code_' + email);
+    if (codeTimer) { clearInterval(codeTimer); codeTimer = null; }
+    codeTipEl.hidden = true;
+    document.getElementById('newPassword').value = '';
+    document.getElementById('resetCode').value = '';
+    showInlineTip(tipEl, '密码修改成功，下次登录请使用新密码', 'success');
+}
+
+// 退出登录：记住账号用于预填充，清除登录态并跳转登录页
+function logout() {
+    localStorage.setItem('aigame_last_login', CURRENT_USER);
+    localStorage.removeItem('aigame_user');
+    location.href = 'users.html';
+}
+</script>
+</body>
+</html>

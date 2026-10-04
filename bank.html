@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>题库·自成AI命题练习系统</title>
+    <link rel="stylesheet" href="./css/common.css?v=20261003e">
+    <link rel="stylesheet" href="./css/pages.css">
+</head>
+<body data-page="bank">
+    <header class="topbar">
+        <div class="topbar-inner wrapper">
+            <a class="brand" href="index.html"><span class="logo">智</span><span class="name">智能命题练习系统</span></a>
+            <nav class="nav">
+                <a href="index.html" data-nav="home">首页</a>
+                <a href="bank.html" data-nav="bank">题库</a>
+                <a href="real.html" data-nav="real">真题库</a>
+                <a href="history.html" data-nav="history">历史习题</a>
+                <a href="archives.html" data-nav="archives">试卷存档</a>
+            </nav>
+            <div class="user-box">
+                <a class="user-home" href="profile.html" title="个人中心"><img src="./img/Users.png" alt=""><span class="uname">lilei</span></a>
+                <a class="logout" href="users.html">退出</a>
+            </div>
+        </div>
+    </header>
+
+    <main class="wrapper">
+        <div class="page-head">
+            <h2>📚 试题库(AI生成题库)</h2>
+            <p>全局唯一题目ID:学科编号-板块内序号-是否真题(0/1) - 题型(0选择/1填空/2大题) - 难度(1-5)，学生可随时查看题目 ID 并在历史习题中检索反馈。</p>
+        </div>
+
+        <div class="stat-grid">
+            <div class="stat-card"><div class="stat-icon" style="background:#e8f2fc;color:#0460bc;">📚</div><div><div class="num" id="st-all">0</div><div class="lbl">在库试题</div></div></div>
+            <div class="stat-card"><div class="stat-icon" style="background:#e6f7ee;color:#18a058;">⭐</div><div><div class="num" id="st-high">0</div><div class="lbl">高信誉分(≥10)只扣不增</div></div></div>
+            <div class="stat-card"><div class="stat-icon" style="background:#fdf6ec;color:#f0a020;">⚠️</div><div><div class="num" id="st-low">0</div><div class="lbl">低信誉分(&lt;0)预警</div></div></div>
+            <div class="stat-card"><div class="stat-icon" style="background:#fdeef1;color:#d03050;">🗑️</div><div><div class="num" id="st-del">0</div><div class="lbl">≤-10 已永久净化</div></div></div>
+        </div>
+        <div class="card">
+            <div class="filter-bar">
+                <div>
+                    <label>学科</label>
+                    <select id="f-subject"><option value="">全部学科</option></select>
+                </div>
+                <div>
+                    <label>题型</label>
+                    <select id="f-type">
+                        <option value="">全部题型</option>
+                        <option value="0">选择题(0)</option>
+                        <option value="1">填空题(1)</option>
+                        <option value="2">主观大题(2)</option>
+                    </select>
+                </div>
+                <div>
+                    <label>难度</label>
+                    <select id="f-diff">
+                        <option value="">全部难度</option>
+                        <option value="1">1级</option><option value="2">2级</option><option value="3">3级</option>
+                        <option value="4">4级</option><option value="5">5级</option>
+                    </select>
+                </div>
+                <div>
+                    <label>来源 / 信誉分</label>
+                    <select id="f-rep">
+                        <option value="">全部题目</option>
+                        <option value="high">信誉分 ≥10（只扣不增）</option>
+                        <option value="low">信誉分 &lt; 0（预警）</option>
+                    </select>
+                </div>
+                <div class="grow">
+                    <label>关键词（题干 / 知识点 / 题目ID）</label>
+                    <input type="text" id="f-kw" placeholder="输入关键词检索">
+                </div>
+                <div>
+                    <label class="flex" style="font-size:12px;color:var(--text-2);margin:0;gap:6px;cursor:pointer;">
+                        <input type="checkbox" id="f-del" style="width:auto;"> 显示已净化删除题
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">试题列表 <span class="sub" id="list-count"></span><span class="right"><button class="btn btn-sm" id="f-reset">重置筛选</button></span></div>
+            <div class="table-wrap">
+                <table class="tbl">
+                    <thead>
+                        <tr>
+                            <th>题目唯一 ID</th><th>学科</th><th>题干</th><th>题型</th><th>难度</th>
+                            <th>知识点</th><th>本体信誉分</th><th>步骤A分</th><th>来源</th><th>状态</th><th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="bank-tbody"></tbody>
+                </table>
+            </div>
+            <div class="empty" id="bank-empty" style="display:none;">
+                <div class="icon">🔍</div><div class="mt8">没有符合筛选条件的试题</div>
+            </div>
+        </div>
+    </main>
+
+    <!-- 题目详情 -->
+    <div class="modal-mask" id="detail-modal">
+        <div class="modal">
+            <div class="modal-head"><h3>题目详情</h3><button class="modal-close" data-close-modal="detail-modal">×</button></div>
+            <div class="modal-body" id="detail-body"></div>
+            <div class="modal-foot">
+                <button class="btn" data-close-modal="detail-modal">关闭</button>
+                <button class="btn btn-primary" onclick="location.href='history.html'">去历史习题反馈此题 →</button>
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer">自成 · AI 命题练习系统 —— 用户反馈 + 双机器复核 · 题库无人运维自动净化</footer>
+
+    <script src="./js/data.js"></script>
+    <script src="./js/common.js?v=20261003g"></script>
+    <script src="./js/bank.js"></script>
+</body>
+</html>

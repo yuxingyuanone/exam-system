@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智能命题练习系统</title>
+    <link rel="stylesheet" href="./css/common.css?v=20261003e">
+    <link rel="stylesheet" href="./css/index.css?v=20261003">
+</head>
+<body data-page="home">
+    <!-- 顶部导航 -->
+    <header class="topbar">
+        <div class="topbar-inner wrapper">
+            <a class="brand" href="index.html">
+                <span class="logo">智</span>
+                <span class="name">智能命题练习系统</span>
+            </a>
+            <nav class="nav">
+                <a href="index.html" data-nav="home">首页</a>
+                <a href="bank.html" data-nav="bank">题库</a>
+                <a href="real.html" data-nav="real">真题库</a>
+                <a href="history.html" data-nav="history">历史习题</a>
+                <a href="archives.html" data-nav="archives">试卷存档</a>
+            </nav>
+            <div class="user-box">
+                <a class="user-home" href="profile.html" title="个人中心">
+                    <img src="./img/Users.png" alt="">
+                    <span class="uname">lilei</span>
+                </a>
+                <a class="logout" href="users.html">退出</a>
+            </div>
+        </div>
+    </header>
+
+    <main class="wrapper">
+        <!-- 欢迎横幅 -->
+        <section class="hero">
+            <div>
+                <h2>你好,lilei 👋 开始今天的智能组卷</h2>
+                <p>双模型隔离校验出题 · 三层信誉分自动质控 · 支持网页在线作答 / 纸质打印导出双模式</p>
+            </div>
+            <div class="model-switch">
+                <div class="ms-title">⚙️ 双智能体模型方案</div>
+                <label><input type="radio" name="modelplan" value="main" checked> 主方案:GLM-4 出题 + DeepSeek-R1 校验</label>
+                <label><input type="radio" name="modelplan" value="cheap"> OPC 平价方案：豆包 API + 硅基流动云</label>
+            </div>
+        </section>
+
+        <!-- 数据概览 -->
+        <section class="stat-grid">
+            <div class="stat-card">
+                <div class="stat-icon" style="background:#e8f2fc;color:#0460bc;">📚</div>
+                <div><div class="num" id="stat-total">0</div><div class="lbl">题库试题总量</div></div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon" style="background:#e6f7ee;color:#18a058;">✅</div>
+                <div><div class="num" id="stat-history">0</div><div class="lbl">我的历史习题</div></div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon" style="background:#fdf6ec;color:#f0a020;">🗂️</div>
+                <div><div class="num" id="stat-archive">0</div><div class="lbl">试卷导出存档</div></div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon" style="background:#fdeef1;color:#d03050;">🧹</div>
+                <div><div class="num" id="stat-deleted">0</div><div class="lbl">信誉分自动净化题数</div></div>
+            </div>
+        </section>
+
+        <!-- 未完成试卷：中途「保存退出」的进度，按当前账号隔离 -->
+        <section id="draft-banner" class="draft-resume" hidden>
+            <div class="card">
+                <div class="card-title">📌 未完成试卷 <span class="sub">中途保存的作答按账号独立保存，随时继续（计时停在保存时刻），交卷后自动清除</span></div>
+                <div id="draft-list" class="draft-list"></div>
+            </div>
+        </section>
+
+        <div class="layout">
+            <!-- 左：组卷参数 -->
+            <div>
+                <div class="card">
+                    <div class="card-title">自定义组卷参数 <span class="sub">设置范围后由双 Agent 流水线自动命题</span></div>
+
+                    <div class="form-row">
+                        <div style="max-width:240px;">
+                            <label class="fld-label">学科</label>
+                            <select id="subject"></select>
+                        </div>
+                        <div>
+                            <label class="fld-label">难度等级(1-5 随数字增大而变难，可多选/不选为混合)</label>
+                            <div class="chips" id="difficulty"></div>
+                        </div>
+                    </div>
+
+                    <div class="mb16">
+                        <label class="fld-label">对应章节（不选默认全部章节）</label>
+                        <div class="chips" id="chapters"></div>
+                    </div>
+
+                    <div class="mb16">
+                        <label class="fld-label">知识点标签（不选默认全部知识点）</label>
+                        <div class="chips" id="points"></div>
+                    </div>
+
+                    <label class="fld-label">题量配置</label>
+                    <div class="count-row mb16">
+                        <div class="count-box">
+                            <label>单选题</label>
+                            <input type="number" min="0" value="3" id="cnt-choice">
+                        </div>
+                        <div class="count-box">
+                            <label>填空题</label>
+                            <input type="number" min="0" value="2" id="cnt-blank">
+                        </div>
+                        <div class="count-box">
+                            <label>主观大题</label>
+                            <input type="number" min="0" value="1" id="cnt-big">
+                        </div>
+                        <div class="count-box total">
+                            <label>试卷总题量</label>
+                            <input type="text" value="6" id="cnt-total" readonly>
+                        </div>
+                    </div>
+
+                    <label class="fld-label">题库来源混合配比（三类数量之和须 = 总题量）</label>
+                    <div class="source-row mb16">
+                        <div class="source-box">
+                            <div class="s-top">🏛️ 原生题库调取</div>
+                            <div class="s-d">优先调取高信誉分存量试题，信誉分越高越优先</div>
+                            <input type="number" min="0" value="6" id="src-stock">
+                        </div>
+                        <div class="source-box">
+                            <div class="s-top">🤖 AI 仿造变式新题</div>
+                            <div class="s-d">以真题为模板，换数字 / 场景 / 提问角度生成新题</div>
+                            <input type="number" min="0" value="0" id="src-imitated">
+                        </div>
+                        <div class="source-box">
+                            <div class="s-top">📝 真题原题</div>
+                            <div class="s-d">从独立真题库直接调取历年真题原题组卷</div>
+                            <input type="number" min="0" value="0" id="src-real">
+                        </div>
+                    </div>
+                    <div class="flex mb16">
+                        <button class="btn btn-sm" id="btn-auto-distribute">⚡ 智能分配配比</button>
+                        <span class="small muted" id="dist-tip"></span>
+                    </div>
+
+                    <label class="fld-label">历史习题筛选（已做 / 未做专项控制）</label>
+                    <div class="seg-cards mb16" id="history-filter">
+                        <div class="seg-card on" data-v="new">
+                            <div class="seg-t">仅生成全新未做习题</div>
+                            <div class="seg-d">排除历史记录中所有已做题目</div>
+                        </div>
+                        <div class="seg-card" data-v="mix">
+                            <div class="seg-t">新旧习题混合组卷</div>
+                            <div class="seg-d">不限制，系统按信誉分调度</div>
+                        </div>
+                        <div class="seg-card" data-v="done">
+                            <div class="seg-t">仅生成过往已做习题</div>
+                            <div class="seg-d">错题复盘专项训练</div>
+                        </div>
+                    </div>
+
+                    <!-- 仿造规则折叠 -->
+                    <div class="collapse mb16" id="imitate-collapse">
+                        <div class="collapse-head">
+                            🎭 AI 仿造专属参数配置
+                            <span class="arrow">▾</span>
+                        </div>
+                        <div class="collapse-body">
+                            <div class="mb16">
+                                <label class="fld-label">参考真题模板（勾选作为仿造蓝本）</label>
+                                <div class="chips" id="ref-real"></div>
+                            </div>
+                            <div class="form-row">
+                                <div>
+                                    <label class="fld-label">仿造相似度档位</label>
+                                    <div class="seg-cards" id="similarity">
+                                        <div class="seg-card" data-v="low"><div class="seg-t">低相似度</div><div class="seg-d">同知识点异构新题</div></div>
+                                        <div class="seg-card on" data-v="mid"><div class="seg-t">中相似度</div><div class="seg-d">保留框架换考查点</div></div>
+                                        <div class="seg-card" data-v="high"><div class="seg-t">高相似度</div><div class="seg-d">高度贴近真题风格</div></div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="fld-label">仿造组卷方式</label>
+                                    <div class="seg-cards two" id="imitate-mode">
+                                        <div class="seg-card on" data-v="only"><div class="seg-t">仅仿造新题</div><div class="seg-d">整卷均为变式新题</div></div>
+                                        <div class="seg-card" data-v="mix"><div class="seg-t">真题 + 仿造混合</div><div class="seg-d">原题变式搭配组卷</div></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <label class="fld-label">仿造约束（避免高度复刻原题，自动查重）</label>
+                            <div class="chips accent" id="imitate-rules">
+                                <label class="chip on"><input type="checkbox" value="number" checked>更换数字</label>
+                                <label class="chip on"><input type="checkbox" value="scene" checked>更换应用场景</label>
+                                <label class="chip on"><input type="checkbox" value="angle" checked>更换提问角度</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <label class="fld-label">练习 / 导出模式</label>
+                    <div class="mode-cards mb16">
+                        <div class="mode-card on" data-mode="online">
+                            <div class="m-check"></div>
+                            <div class="m-icon">🖥️</div>
+                            <div class="m-t">网页交互式 PDF 在线作答</div>
+                            <div class="m-d">PDF.js 渲染试卷 · 全局手写草稿画布 · 选择勾选 / 主观题输入框 · 作答实时上传，AI 自动批改 · 完成后自动归档历史习题</div>
+                        </div>
+                        <div class="mode-card" data-mode="print">
+                            <div class="m-check"></div>
+                            <div class="m-icon">🖨️</div>
+                            <div class="m-t">静态 PDF / Word 打印导出</div>
+                            <div class="m-d">导出无交互控件的纯静态试卷用于纸面作答 · 后台自动留存试卷存档（全部题目 ID、导出时间、试卷标签）· 题目初始信誉分 0 入库</div>
+                        </div>
+                    </div>
+
+                    <div class="name-preview mb16">
+                        <span class="np-lbl">📄 试卷名称（自动命名）：</span>
+                        <span class="np-name" id="paper-name">微积分_20260917</span>
+                    </div>
+
+                    <div class="flex">
+                        <button class="btn btn-primary btn-lg grow" id="btn-generate">🚀 发起智能组卷</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- 双 Agent 流水线弹窗 -->
+    <div class="modal-mask" id="pipeline-modal">
+        <div class="modal">
+            <div class="modal-head">
+                <h3>🤖 双 Agent 智能组卷流水线</h3>
+                <button class="modal-close" data-close-modal="pipeline-modal">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="agent-flow">
+                    <div class="agent-box">
+                        <div class="ab-name" id="agent-a-name">出题 Agent</div>
+                        <div class="ab-model" id="agent-a-model">智谱 GLM-4</div>
+                        <div class="ab-d">分析知识库 → 原生出题 / 真题解析 → 仿造变式题生成，输出题干、选项、标准答案、解题步骤 A</div>
+                    </div>
+                    <div class="agent-iso">
+                        <div class="shield">🛡️</div>
+                        <div>答案隔离</div>
+                        <div class="small">选择题剔除选项</div>
+                    </div>
+                    <div class="agent-box">
+                        <div class="ab-name" id="agent-b-name">校验 Agent</div>
+                        <div class="ab-model" id="agent-b-model">DeepSeek-R1</div>
+                        <div class="ab-d">全程隔离出题端原始答案，仅接收纯题干独立推演，生成独立答案与解题步骤 B</div>
+                    </div>
+                </div>
+
+                <div class="pipeline-summary" id="pipeline-summary">正在准备组卷任务…</div>
+
+                <div class="steps-v" id="pipeline-steps">
+                    <div class="step-v" data-step="0"><div class="dot">1</div><div class="line"></div><div class="st-body"><div class="st-t">题库优先调度检索</div><div class="st-d">按知识点 / 章节 / 难度 / 信誉分 / 新旧要求检索存量试题</div></div></div>
+                    <div class="step-v" data-step="1"><div class="dot">2</div><div class="line"></div><div class="st-body"><div class="st-t">出题 Agent 生成缺口试题</div><div class="st-d">存量不足时启动生成流水线（仿造题先做模板特征拆解）</div></div></div>
+                    <div class="step-v" data-step="2"><div class="dot">3</div><div class="line"></div><div class="st-body"><div class="st-t">系统隔离预处理</div><div class="st-d">屏蔽参考答案，选择题剔除全部选项，仅保留纯题干下发</div></div></div>
+                    <div class="step-v" data-step="3"><div class="dot">4</div><div class="line"></div><div class="st-body"><div class="st-t">校验 Agent 独立推演</div><div class="st-d">独立推导答案并生成解题步骤 B</div></div></div>
+                    <div class="step-v" data-step="4"><div class="dot">5</div><div class="line"></div><div class="st-body"><div class="st-t">答案一致性比对 · 入库判定</div><div class="st-d">只比对最终答案，支持一题多解；不一致即废弃</div></div></div>
+                    <div class="step-v" data-step="5"><div class="dot">6</div><div class="line"></div><div class="st-body"><div class="st-t">仿造查重 + 组卷内部查重</div><div class="st-d">与参考真题、库内试题及同卷题目比对，超标自动重生成</div></div></div>
+                </div>
+
+                <div class="log-panel" id="pipeline-log"></div>
+            </div>
+            <div class="modal-foot">
+                <button class="btn" data-close-modal="pipeline-modal">取消</button>
+                <button class="btn btn-primary" id="btn-enter" disabled>完成，进入试卷 →</button>
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer">自成 · AI 命题练习系统 —— OPC 轻量化部署 · 双 AI Agent 自动出题 / 校验 / 题库清洗（前端演示版）</footer>
+
+    <script src="./js/data.js"></script>
+    <script src="./js/common.js?v=20261003g"></script>
+    <script src="./js/index.js?v=20261003c"></script>
+</body>
+</html>

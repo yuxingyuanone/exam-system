@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>在线答题 - 理工科智卷工坊</title>
+    <link rel="stylesheet" href="./css/answer.css">
+</head>
+<body>
+    <div class="header">
+        <div>在线答题 <span id="paper_name"></span></div>
+        <div class="timer" id="timer">00:00:00</div>
+    </div>
+
+    <div class="container">
+        <!-- 主答题区 -->
+        <div class="main-area">
+            <div class="nav-area" id="nav_area"></div>
+            <div class="question-card" id="question_card">
+                <div class="question-title" id="question_title"></div>
+                <div class="options-area" id="options_area"></div>
+                <textarea class="answer-input" id="answer_input" placeholder="请输入你的答案..." style="display: none;"></textarea>
+                
+                <div class="btn-group">
+                    <button class="btn btn-primary" onclick="submitAnswer()">提交本题</button>
+                    <button class="btn btn-default" onclick="prevQuestion()">上一题</button>
+                    <button class="btn btn-default" onclick="nextQuestion()">下一题</button>
+                </div>
+
+                <!-- AI批改结果展示 -->
+                <div class="result-card" id="result_card">
+                    <div class="result-title" id="result_title"></div>
+                    <div class="result-content" id="result_content"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 右侧面板：答题记录 / 草稿本 -->
+        <div class="side-panel">
+            <div class="tab-header">
+                <div class="tab-item active" onclick="switchTab('answer', event)">答题</div>
+                <div class="tab-item" onclick="switchTab('draft', event)">草稿本</div>
+            </div>
+            <!-- 答题记录 -->
+            <div class="tab-content active" id="tab_answer">
+                <h4 style="margin-bottom: 15px;">答题进度</h4>
+                <div id="progress_info"></div>
+                <button class="btn btn-primary" style="width: 100%; margin-top: 20px;" onclick="submitAll()">提交整卷</button>
+            </div>
+            <!-- 独立草稿页面 -->
+            <div class="tab-content" id="tab_draft">
+                <textarea class="draft-input" id="draft_input" placeholder="在这里打草稿，内容自动保存，不会提交..."></textarea>
+            </div>
+        </div>
+    </div>
+
+    <script src="./js/data.js"></script>
+    <script src="./js/common.js?v=20261003g"></script>
+    <script>
+        const CURRENT_USER = localStorage.getItem('aigame_user') || 'guest';
+        const DRAFT_KEY = 'aigame_answer_draft_' + CURRENT_USER;
+        const ANSWER_KEY = 'aigame_answer_answers_' + CURRENT_USER;
+        let paper = null, questions = [], currentIndex = 0, answers = {}, timer = null, seconds = 0, submitted = false;
+        const graded = {};
+
+        // 保存当前作答到本地（按用户隔离）
+        function saveDraft() {
+            if (paper) localStorage.setItem(ANSWER_KEY, JSON.stringify({ paperName: paper.name, answers }));
+        }
+
+        // 初始化：从本地题库加载试卷题目
+        function initPaper() {
+            paper = Store.currentPaper();
+            if (!paper || !paper.questions || !paper.questions.length) {
+                const qs = Store.questions().filter(q => q.subject === 'CALC');
+                paper = {
+                    name: Store.nextPaperName('微积分'), subject: 'CALC',
+                    questions: [qs.find(q => q.id.startsWith('CALC-0003-')), qs.find(q => q.id.startsWith('CALC-0009-')),
+                        qs.find(q => q.id.startsWith('CALC-0014-')), qs.find(q => q.id.startsWith('CALC-0025-')),
+                        qs.find(q => q.id.startsWith('CALC-0021-'))].filter(Boolean)
+                };
+            }
+            questions = paper.questions.map(q => ({ id: q.id, type: q.type, stem: q.stem, options: q.options || [], answer: q.answer, subject: q.subject }));
+            try { const d = JSON.parse(localStorage.getItem(ANSWER_KEY)); if (d && d.paperName === paper.name) Object.assign(answers, d.answers || {}); } catch (e) {}
+            document.getElementById('paper_name').textContent = paper.name;
+            renderNav(); showQuestion(0); startTimer(); loadDraft();
+            bindAnswerInput();
+        }
+
+        // 主观/填空题输入实时回写 answers，避免切题后输入框被清空导致草稿丢失
+        function bindAnswerInput() {
+            const input = document.getElementById('answer_input');
+            input.addEventListener('input', function() {
+                if (questions[currentIndex]) {
+                    answers[questions[currentIndex].id] = this.value;
+                    renderNav();
+                    saveDraft();
+                }
+            });
+        }
+
+        // 渲染题目导航
+        function renderNav() {
+            const nav = document.getElementById('nav_area');
+            nav.innerHTML = '';
+            questions.forEach((_, idx) => {
+                const dot = document.createElement('div');
+                dot.className = 'nav-dot' + (idx === currentIndex ? ' active' : '') + (answers[questions[idx].id] ? ' done' : '');
+                dot.textContent = idx + 1;
+                dot.onclick = () => showQuestion(idx);
+                nav.appendChild(dot);
+            });
+            document.getElementById('progress_info').textContent = `已完成 ${Object.keys(answers).length} / ${questions.length} 题`;
+        }
+
+        // 显示题目（适配 SEED 数据结构）
+        function showQuestion(index) {
+            currentIndex = index;
+            renderNav();
+            const q = questions[index];
+            document.getElementById('question_title').textContent = `第${index+1}题：${q.stem}`;
+
+            const optionsArea = document.getElementById('options_area');
+            const answerInput = document.getElementById('answer_input');
+            const resultCard = document.getElementById('result_card');
+            resultCard.style.display = 'none';
+
+            if (q.type === 0 && q.options.length) {
+                // 选择题：选项形如 "A. xxx"，取首字母作为答案标识
+                optionsArea.style.display = 'block';
+                answerInput.style.display = 'none';
+                optionsArea.innerHTML = '';
+                q.options.forEach(opt => {
+                    const letter = opt[0];
+                    const item = document.createElement('div');
+                    item.className = 'option-item' + (answers[q.id] === letter ? ' selected' : '');
+                    item.textContent = opt;
+                    item.onclick = () => selectOption(q.id, letter, item);
+                    optionsArea.appendChild(item);
+                });
+            } else {
+                // 填空/主观题：文字输入
+                optionsArea.style.display = 'none';
+                answerInput.style.display = 'block';
+                answerInput.value = answers[q.id] || '';
+                answerInput.disabled = submitted;
+            }
+        }
+
+        // 选择选项（交卷后锁定 + 实时保存）
+        function selectOption(qid, opt, el) {
+            if (submitted) return;
+            answers[qid] = opt;
+            document.querySelectorAll('.option-item').forEach(i => i.classList.remove('selected'));
+            el.classList.add('selected');
+            renderNav();
+            saveDraft();
+        }
+
+        // 提交单题答案（本地批改）
+        function submitAnswer() {
+            if (submitted) { alert('整卷已提交，不可再交本题'); return; }
+            const q = questions[currentIndex];
+            if (graded[q.id] && graded[q.id].submitted) { alert('本题已提交批改，不可重复评分'); return; }
+            const userAnswer = (q.type === 0) ? (answers[q.id] || '') : document.getElementById('answer_input').value.trim();
+            if (q.type !== 0) answers[q.id] = userAnswer;
+            if (!userAnswer) { alert('请先作答'); return; }
+
+            const std = (q.answer || '').trim();
+            let correct;
+            if (q.type === 0) {
+                correct = userAnswer === std;
+            } else {
+                // 与 exam.js gradeObjective 对齐：去空白 + 多 token 等价（如 1/6 ≈ 1 / 6）
+                const norm = s => (s || '').replace(/\s/g, '');
+                const tokens = std.split(/[（）()\/]/).map(t => t.trim()).filter(Boolean).map(norm);
+                correct = tokens.some(t => norm(userAnswer) === t) ||
+                    (tokens[0] && tokens[0].length >= 4 && norm(userAnswer).includes(tokens[0]));
+            }
+            graded[q.id] = { submitted: true, correct, userAnswer, standard: std };
+            Store.changeReputation(q.id, correct ? 1 : -1);
+            showResult({
+                is_correct: correct,
+                ai_grade_result: correct ? '答案匹配标准答案' : '与标准答案不符（主观题为演示判定）',
+                standard_answer: std,
+                question_credit_score: Store.getQuestion(q.id).reputation
+            });
+            saveDraft();
+            renderNav();
+        }
+
+        // 显示批改结果
+        function showResult(data) {
+            const card = document.getElementById('result_card');
+            const title = document.getElementById('result_title');
+            const content = document.getElementById('result_content');
+
+            card.className = 'result-card ' + (data.is_correct ? 'result-correct' : 'result-wrong');
+            title.textContent = data.is_correct ? '✅ 回答正确' : '❌ 回答错误';
+            content.innerHTML = `
+                <div>批改评语：${data.ai_grade_result}</div>
+                <div>标准答案：${data.standard_answer}</div>
+                <div>题目信誉分：${data.question_credit_score || 0}</div>
+            `;
+            card.style.display = 'block';
+        }
+
+        // 切换标签页
+        function switchTab(tab, ev) {
+            document.querySelectorAll('.tab-item').forEach(i => i.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(i => i.classList.remove('active'));
+            ev.currentTarget.classList.add('active');
+            document.getElementById('tab_' + tab).classList.add('active');
+        }
+
+        // 草稿自动保存到本地存储（按用户隔离）
+        document.getElementById('draft_input').addEventListener('input', function() {
+            localStorage.setItem(DRAFT_KEY, this.value);
+        });
+
+        function loadDraft() {
+            const saved = localStorage.getItem(DRAFT_KEY);
+            if (saved) {
+                document.getElementById('draft_input').value = saved;
+            }
+        }
+
+        // 计时器
+        function startTimer() {
+            timer = setInterval(() => {
+                seconds++;
+                const h = Math.floor(seconds / 3600).toString().padStart(2, '0');
+                const m = Math.floor((seconds % 3600) / 60).toString().padStart(2, '0');
+                const s = (seconds % 60).toString().padStart(2, '0');
+                document.getElementById('timer').textContent = `${h}:${m}:${s}`;
+            }, 1000);
+        }
+
+        function prevQuestion() {
+            if (currentIndex > 0) showQuestion(currentIndex - 1);
+        }
+
+        function nextQuestion() {
+            if (currentIndex < questions.length - 1) showQuestion(currentIndex + 1);
+        }
+
+        function submitAll() {
+            const done = Object.keys(answers).length;
+            if (submitted) { alert('整卷已提交，不可重复提交'); return; }
+            if (!confirm(`已完成${done}题，共${questions.length}题，确认提交整卷？`)) return;
+            submitted = true;
+            clearInterval(timer);
+            // 本地批改并归档到当前用户历史习题；已单题提交的题跳过重复评分，避免双扣/双加
+            const entries = questions.map(q => {
+                const ua = answers[q.id] || '';
+                if (graded[q.id] && graded[q.id].submitted) {
+                    return { id: q.id, subject: q.subject, correct: graded[q.id].correct, userAnswer: ua, paperName: paper.name };
+                }
+                const std = (q.answer || '').trim();
+                let correct;
+                if (q.type === 0) {
+                    correct = ua === std;
+                } else {
+                    const norm = s => (s || '').replace(/\s/g, '');
+                    const tokens = std.split(/[（）()\/]/).map(t => t.trim()).filter(Boolean).map(norm);
+                    correct = tokens.some(t => norm(ua) === t) ||
+                        (tokens[0] && tokens[0].length >= 4 && norm(ua).includes(tokens[0]));
+                }
+                Store.changeReputation(q.id, correct ? 1 : -1);
+                graded[q.id] = { submitted: true, correct, userAnswer: ua, standard: q.answer };
+                return { id: q.id, subject: q.subject, correct, userAnswer: ua, paperName: paper.name };
+            });
+            Store.addHistory(entries);
+            saveDraft();
+            const right = entries.filter(e => e.correct).length;
+            alert(`整卷已提交，共 ${entries.length} 题，正确 ${right} 题`);
+            renderNav();
+            showQuestion(currentIndex);
+        }
+
+        window.onload = initPaper;
+    </script>
+</body>
+</html>
+
+

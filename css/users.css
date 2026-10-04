@@ -1,0 +1,191 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+body {
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+    /* 直接在body写动态流线背景，多组svg波浪 */
+    background-color: #f5f7fa;
+    background-image: url("data:image/svg+xml,%3Csvg width='1000' height='600' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0,80 Q250,20 500,100 T1000,60' fill='none' stroke='%234080ff' stroke-width='2' opacity='0.2'/%3E%3Cpath d='M0,220 Q250,300 500,180 T1000,240' fill='none' stroke='%234080ff' stroke-width='1.5' opacity='0.16'/%3E%3Cpath d='M0,400 Q250,340 500,460 T1000,420' fill='none' stroke='%234080ff' stroke-width='1' opacity='0.12'/%3E%3C/svg%3E");
+    background-repeat: repeat;
+    background-size: 1000px 600px;
+    animation: bodyWaveMove 16s linear infinite;
+    overflow: hidden;
+}
+
+/* body背景线条动画 */
+@keyframes bodyWaveMove {
+    0% {
+        background-position: 0 0;
+    }
+    100% {
+        background-position: -1000px 600px;
+    }
+}
+
+.loginWrapper {
+    width: 420px;
+    max-width: calc(100% - 32px); /* 缩放/窄屏时自动收缩，不出屏 */
+    background: #ffffff;
+    padding: 40px 32px;
+    border-radius: 12px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+    position: relative;
+    z-index: 10;
+}
+
+.titleBrand{
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.titleBrand h2{
+  font-size: 26px;
+  color: #222;
+  font-weight: 600;
+}
+
+.banner{
+  margin-bottom: 20px;
+}
+
+.banner label{
+  display: block;
+  font-size: 14px;
+  color: #444;
+  margin-bottom: 8px;
+}
+
+.banner input{
+  width: 100%;
+  height: 44px;
+  padding: 0 14px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 15px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.banner input:focus{
+  border-color: #4080ff;
+}
+
+.form-extra{
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 26px;
+  font-size: 14px;
+}
+
+.remember{
+  color: #555;
+  cursor: pointer;
+}
+
+.form-extra a{
+  color: #4080ff;
+  text-decoration: none;
+}
+
+.form-extra a:hover{
+  text-decoration: underline;
+}
+
+.login-btn{
+  width: 100%;
+  height: 46px;
+  background-color: #4080ff;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.login-btn:hover{
+  background-color: #2b6ede;
+}
+
+.login-btn:active{
+  background-color: #2058bc;
+}
+
+/* 忘记密码页：验证码行、发送按钮、返回链接 */
+.code-row{
+  display: flex;
+  gap: 10px;
+}
+.code-row input{
+  flex: 1;
+}
+.send-btn{
+  height: 44px;
+  padding: 0 16px;
+  border: 1px solid #4080ff;
+  background: #fff;
+  color: #4080ff;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.2s;
+}
+.send-btn:hover{
+  background: #f0f5ff;
+}
+.send-btn:disabled{
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.back-link{
+  display: block;
+  text-align: center;
+  margin-top: 18px;
+  color: #888;
+  font-size: 14px;
+  text-decoration: none;
+}
+.back-link:hover{
+  color: #4080ff;
+}
+
+/* 页内提示条（替代 alert，避免弹窗关不掉） */
+.form-msg{
+  margin: 4px 0 14px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+  background: #f2f3f5;
+  color: #555;
+  word-break: break-all;
+}
+.form-msg[hidden]{
+  display: none;
+}
+.form-msg-error{
+  background: #fef0f0;
+  color: #d93026;
+}
+.form-msg-success{
+  background: #edf9f0;
+  color: #1a8a3c;
+}
+.form-msg-info{
+  background: #eef4ff;
+  color: #2b6ede;
+  margin-top: 10px;
+}
+
+
+

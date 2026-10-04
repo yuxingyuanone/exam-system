@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登录</title>
+    <link rel="stylesheet" href="./css/users.css?v=20261004">
+</head>
+<body>
+    <div class="loginWrapper">
+        <div class="titleBrand">
+            <h2>登录</h2>
+        </div>
+        <form id="form-login" onsubmit="return false;">
+            <div class="banner">
+                <label>邮箱</label>
+                <input type="text" id="login-account" placeholder="请输入邮箱">
+            </div>
+            <div class="banner">
+                <label>密码</label>
+                <input type="password" id="login-pwd" placeholder="请输入密码">
+            </div>
+            <div class="form-extra">
+                <label class="remember"><input type="checkbox" checked> 记住我</label>
+                <span><a href="./forgot.html">忘记密码？</a> · <a href="./register.html">注册</a></span>
+            </div>
+            <div class="form-msg form-msg-error" id="login-tip" hidden></div>
+            <button type="button" class="login-btn" id="btn-login">登 录</button>
+        </form>
+    </div>
+
+    <script>
+        (function () {
+            const accEl = document.getElementById('login-account');
+            const pwdEl = document.getElementById('login-pwd');
+            const tipEl = document.getElementById('login-tip');
+            const showTip = msg => { tipEl.hidden = false; tipEl.textContent = msg; };
+            // 退出后回到本页：预填充上次登录的账号与密码；并预置体验账号 lilei/123456
+            try {
+                const tbl = JSON.parse(localStorage.getItem('aigame_passwords') || '{}');
+                if (!tbl.lilei) {
+                    tbl.lilei = '123456';
+                    localStorage.setItem('aigame_passwords', JSON.stringify(tbl));
+                }
+                const last = localStorage.getItem('aigame_last_login') || '';
+                if (last) {
+                    accEl.value = last;
+                    if (tbl[last]) pwdEl.value = tbl[last];
+                }
+            } catch (e) { /* 预填充失败不阻塞登录 */ }
+            document.getElementById('btn-login').addEventListener('click', () => {
+                const acc = accEl.value.trim();
+                const pwd = pwdEl.value.trim();
+                if (!acc || !pwd) { showTip('请输入账号和密码'); return; }
+                let tbl = {};
+                try { tbl = JSON.parse(localStorage.getItem('aigame_passwords') || '{}'); } catch (e) { }
+                if (!tbl[acc]) { showTip('该账号未注册，请先注册'); return; }
+                if (tbl[acc] !== pwd) { showTip('密码错误，可点「忘记密码」通过邮箱验证码重置'); return; }
+                localStorage.setItem('aigame_user', acc);
+                localStorage.setItem('aigame_last_login', acc); // 下次进入登录页预填充
+                location.href = 'index.html';
+            });
+        })();
+    </script>
+</body>
+</html>

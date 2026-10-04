@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>注册</title>
+    <link rel="stylesheet" href="./css/register.css?v=20261004">
+</head>
+<body>
+    <div class="loginWrappertwo">
+        <div class="title-brand">
+            <h2>注册</h2>
+        </div>
+        <form id="formRegister" onsubmit="return false;">
+        <div class="form-item">
+            <label>邮箱</label>
+            <input type="text" id="reg-account" placeholder="请输入邮箱" autocomplete="username">
+        </div>
+        <div class="form-item">
+            <label>昵称</label>
+            <input type="text" id="reg-name" placeholder="请输入昵称">
+        </div>
+        <div class="form-item">
+            <label>密码</label>
+            <input type="password" id="reg-pwd" placeholder="设置密码（不少于 6 位）" autocomplete="new-password">
+        </div>
+        <div class="form-item">
+            <label>确认密码</label>
+            <input type="password" id="reg-pwd2" placeholder="请再次输入密码" autocomplete="new-password">
+        </div>
+        <div class="form-msg form-msg-error" id="reg-tip" hidden></div>
+        <button type="button" class="login-btn" id="btn-register">注 册</button>
+        </form>
+        <a class="back-link" href="./users.html">已有账号？返回登录</a>
+    </div>
+
+    <script>
+        (function () {
+            const tipEl = document.getElementById('reg-tip');
+            const showTip = msg => {
+                tipEl.hidden = false;
+                tipEl.textContent = msg;
+            };
+            document.getElementById('btn-register').addEventListener('click', () => {
+                const acc = document.getElementById('reg-account').value.trim();
+                const name = document.getElementById('reg-name').value.trim();
+                const pwd = document.getElementById('reg-pwd').value.trim();
+                const pwd2 = document.getElementById('reg-pwd2').value.trim();
+                if (!acc) { showTip('请输入邮箱'); return; }
+                if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(acc)) { showTip('请输入正确的邮箱格式'); return; }
+                if (!name) { showTip('请输入昵称'); return; }
+                if (pwd.length < 6) { showTip('密码不少于 6 位'); return; }
+                if (pwd !== pwd2) { showTip('两次输入的密码不一致'); return; }
+
+                let tbl = {};
+                try { tbl = JSON.parse(localStorage.getItem('aigame_passwords') || '{}'); } catch (e) { tbl = {}; }
+                if (tbl[acc]) { showTip('该邮箱已注册，请直接登录'); return; }
+                tbl[acc] = pwd;
+                localStorage.setItem('aigame_passwords', JSON.stringify(tbl));
+                localStorage.setItem('aigame_nickname_' + acc, name);
+                localStorage.setItem('aigame_user', acc);
+                localStorage.setItem('aigame_last_login', acc);
+                location.href = 'index.html';
+            });
+        })();
+    </script>
+</body>
+</html>
