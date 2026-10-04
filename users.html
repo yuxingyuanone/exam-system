@@ -52,6 +52,8 @@
                 const acc = accEl.value.trim();
                 const pwd = pwdEl.value.trim();
                 if (!acc || !pwd) { showTip('请输入账号和密码'); return; }
+                // 邮箱格式校验（lilei 为内置体验账号，豁免邮箱格式）
+                if (acc !== 'lilei' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(acc)) { showTip('请输入正确邮箱地址'); return; }
                 let tbl = {};
                 try { tbl = JSON.parse(localStorage.getItem('aigame_passwords') || '{}'); } catch (e) { }
                 if (!tbl[acc]) { showTip('该账号未注册，请先注册'); return; }
