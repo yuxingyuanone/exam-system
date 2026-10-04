@@ -47,7 +47,7 @@
                 const pwd = document.getElementById('reg-pwd').value.trim();
                 const pwd2 = document.getElementById('reg-pwd2').value.trim();
                 if (!acc) { showTip('请输入邮箱'); return; }
-                if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(acc)) { showTip('请输入正确的邮箱格式'); return; }
+                if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(acc)) { showTip('请输入正确邮箱地址'); return; }
                 if (!name) { showTip('请输入昵称'); return; }
                 if (pwd.length < 6) { showTip('密码不少于 6 位'); return; }
                 if (pwd !== pwd2) { showTip('两次输入的密码不一致'); return; }
